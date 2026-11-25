@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Extract AMD64 MINIDUMP_EXCEPTION_STREAM, CONTEXT, stack and register memory."""
-import struct, sys
+import struct, sys, shutil
 from pathlib import Path
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 
 DMP=Path(sys.argv[1]); OUT=Path("orbitals_exception_analysis"); OUT.mkdir(exist_ok=True)
+LEGACY_OUT=Path("caller_1B5A8FF0"); LEGACY_OUT.mkdir(exist_ok=True)
 SIG=0x504D444D
 def read(f,o,n):
     f.seek(o); b=f.read(n)
@@ -288,4 +289,8 @@ with DMP.open("rb") as f:
     (OUT/"ucrt_memmove_prologue_and_fault.txt").write_text("\n".join(ucrt_lines),encoding="utf-8")
     lines += ["","DISASSEMBLY AROUND RIP:"]+disasm(md,readva(f,rs,max(0,rip-0x40),0x200),max(0,rip-0x40),100)
     (OUT/"exception_context.txt").write_text("\n".join(lines),encoding="utf-8")
+    # Old workflow revisions upload caller_1B5A8FF0/; mirror output there too
+    # so a rerun of an older failed job can still publish the new analysis.
+    for p in OUT.iterdir():
+        if p.is_file(): shutil.copy2(p, LEGACY_OUT/p.name)
     print("\n".join(lines[-180:]))
