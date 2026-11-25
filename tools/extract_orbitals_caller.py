@@ -76,6 +76,22 @@ def scan_patterns(f,rs,specs,chunk_size=8*1024*1024,max_hits=200):
             pos+=take
             total+=take
     return total,hits
+def memory_info(f,s):
+    """Parse MINIDUMP_MEMORY_INFO_LIST (stream 16)."""
+    if 16 not in s:return []
+    z,r=s[16]
+    if z<16:return []
+    hs,es=struct.unpack("<II",read(f,r,8))
+    n=u64(f,r+8)
+    if hs<16 or es<48 or n>2000000 or hs+n*es>z:return []
+    out=[]
+    for i in range(n):
+        p=r+hs+i*es
+        base,alloc=struct.unpack("<QQ",read(f,p,16))
+        aprot=u32(f,p+16); region=u64(f,p+24)
+        state,protect,kind=struct.unpack("<III",read(f,p+32,12))
+        out.append((base,alloc,region,aprot,state,protect,kind))
+    return out
 def modules(f,s):
     if 4 not in s:return []
     z,r=s[4]; n=u32(f,r); out=[]
@@ -181,11 +197,21 @@ with DMP.open("rb") as f:
         src=struct.unpack_from("<Q",desc,8)[0]
         lines.append("source qword = "+src.to_bytes(8,"little").hex(" "))
         lines.append("u16 words = "+", ".join(f"{x:#06x}" for x in struct.unpack("<4H",src.to_bytes(8,"little"))))
+    # Correlate the destination with the dump's virtual-memory region metadata.
+    meminfo=memory_info(f,s)
+    lines += ["","DESTINATION MEMORY-INFO REGIONS:"]
+    dest=struct.unpack_from("<Q",desc,0)[0] if desc else 0x12E1A8000C
+    region_hits=[m for m in meminfo if m[0]<=dest<m[0]+m[2]]
+    if region_hits:
+        for base,alloc,region,aprot,state,protect,kind in region_hits:
+            lines.append(f"base={base:#x} allocation_base={alloc:#x} region_size={region:#x} allocation_protect={aprot:#x} state={state:#x} protect={protect:#x} type={kind:#x}")
+    else:
+        lines.append(f"no MemoryInfoList region contains destination {dest:#x}; entries={len(meminfo)}")
     # Search all captured memory for the exact bad source and size inputs.
     source_value=struct.unpack_from("<Q",desc,8)[0] if desc else 0x01460149013D0140
     specs=[
         ("source_qword",struct.pack("<Q",source_value)),
-        ("x25_qword",struct.pack("<Q",0x01490140)),
+        ("x25_qword",struct.pack("<Q",0x01490140)),\n        ("x25_dword",struct.pack("<I",0x01490140)),
         ("copy_size_qword",struct.pack("<Q",0x05240500)),
         ("copy_size_dword",struct.pack("<I",0x05240500)),
     ]
