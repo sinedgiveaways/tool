@@ -192,13 +192,13 @@ with DMP.open("rb") as f:
     scanned,hits=scan_patterns(f,rs,specs)
     scan_lines=[f"scanned_virtual_bytes={scanned:#x} ({scanned/1024/1024/1024:.2f} GiB)"]
     for name,_ in specs:
-        scan_lines.append(f"\\n{name}: {len(hits[name])} hit(s)"+(" (first 200 shown)" if len(hits[name])>=200 else ""))
+        scan_lines.append(f"\n{name}: {len(hits[name])} hit(s)"+(" (first 200 shown)" if len(hits[name])>=200 else ""))
         for va in hits[name]:
             scan_lines.append(f"  {va:#018x}")
             around=readva(f,rs,max(0,va-0x20),0x60)
             if around:
                 scan_lines.append("    "+around.hex(" "))
-    (OUT/"bad_argument_value_occurrences.txt").write_text("\\n".join(scan_lines),encoding="utf-8")
+    (OUT/"bad_argument_value_occurrences.txt").write_text("\n".join(scan_lines),encoding="utf-8")
     lines += ["","BAD ARGUMENT VALUE SCAN:"]+scan_lines
     # Inspect the exact native helper and thunk identified in the stack.
     exe=next(((b,z,n) for b,z,n in mods if n.lower().endswith("orbitals-recomp.exe")),None)
