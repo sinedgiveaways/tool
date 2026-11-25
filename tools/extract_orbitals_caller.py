@@ -49,6 +49,33 @@ def readva(f,rs,va,n):
         chunks.append(read(f,file_off,take))
         pos+=take
     return b"".join(chunks)
+def scan_patterns(f,rs,specs,chunk_size=8*1024*1024,max_hits=200):
+    """Search captured virtual-memory bytes for exact little-endian values."""
+    hits={name:[] for name,_ in specs}
+    seen={name:set() for name,_ in specs}
+    total=0
+    maxlen=max(len(pat) for _,pat in specs)
+    for start,size,off in rs:
+        pos=0
+        carry=b""
+        while pos<size:
+            take=min(chunk_size,size-pos)
+            chunk=read(f,off+pos,take)
+            buf=carry+chunk
+            buf_va=start+pos-len(carry)
+            for name,pat in specs:
+                idx=buf.find(pat)
+                while idx>=0:
+                    va=buf_va+idx
+                    if start<=va and va+len(pat)<=start+size and va not in seen[name]:
+                        seen[name].add(va)
+                        if len(hits[name])<max_hits:
+                            hits[name].append(va)
+                    idx=buf.find(pat,idx+1)
+            carry=buf[-(maxlen-1):] if maxlen>1 else b""
+            pos+=take
+            total+=take
+    return total,hits
 def modules(f,s):
     if 4 not in s:return []
     z,r=s[4]; n=u32(f,r); out=[]
@@ -154,6 +181,25 @@ with DMP.open("rb") as f:
         src=struct.unpack_from("<Q",desc,8)[0]
         lines.append("source qword = "+src.to_bytes(8,"little").hex(" "))
         lines.append("u16 words = "+", ".join(f"{x:#06x}" for x in struct.unpack("<4H",src.to_bytes(8,"little"))))
+    # Search all captured memory for the exact bad source and size inputs.
+    source_value=struct.unpack_from("<Q",desc,8)[0] if desc else 0x01460149013D0140
+    specs=[
+        ("source_qword",struct.pack("<Q",source_value)),
+        ("x25_qword",struct.pack("<Q",0x01490140)),
+        ("copy_size_qword",struct.pack("<Q",0x05240500)),
+        ("copy_size_dword",struct.pack("<I",0x05240500)),
+    ]
+    scanned,hits=scan_patterns(f,rs,specs)
+    scan_lines=[f"scanned_virtual_bytes={scanned:#x} ({scanned/1024/1024/1024:.2f} GiB)"]
+    for name,_ in specs:
+        scan_lines.append(f"\\n{name}: {len(hits[name])} hit(s)"+(" (first 200 shown)" if len(hits[name])>=200 else ""))
+        for va in hits[name]:
+            scan_lines.append(f"  {va:#018x}")
+            around=readva(f,rs,max(0,va-0x20),0x60)
+            if around:
+                scan_lines.append("    "+around.hex(" "))
+    (OUT/"bad_argument_value_occurrences.txt").write_text("\\n".join(scan_lines),encoding="utf-8")
+    lines += ["","BAD ARGUMENT VALUE SCAN:"]+scan_lines
     # Inspect the exact native helper and thunk identified in the stack.
     exe=next(((b,z,n) for b,z,n in mods if n.lower().endswith("orbitals-recomp.exe")),None)
     lines += ["","NATIVE HELPER / THUNK DISASSEMBLY:"]
