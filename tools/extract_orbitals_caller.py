@@ -107,6 +107,14 @@ with DMP.open("rb") as f:
             lines.append(f"{candidate_base+off:016X}: "+candidate[off:off+16].hex(" "))
     else:
         lines.append("<candidate context not captured>")
+    if stack:
+        lines += ["","STACK RETURN-ADDRESS CANDIDATES:"]
+        for off in range(0,len(stack)-7,8):
+            q=struct.unpack_from("<Q",stack,off)[0]
+            for mb,mz,mn in mods:
+                if mb<=q<mb+mz:
+                    lines.append(f"RSP+0x{off:03X} = {q:#018x} ({mn}+{q-mb:#x})")
+                    break
     lines += ["","REGISTER-POINTED MEMORY (0x80 bytes where captured):"]
     for k,v in regs.items():
         if v:
@@ -195,7 +203,16 @@ with DMP.open("rb") as f:
         va=base+0x4AFCD0
         lines += ["","LARGE-COPY TRACKER CALLBACK TARGET:",f"VA={va:#x} RVA=0x4AFCD0"]
         lo=va; blob=readva(f,rs,lo,0x300)
+        tracker_lines=[f"EXE {exename} imagebase={base:#x}",f"tracker_rva=0x4AFCD0 va={va:#x}"]
+        tracker_lines += disasm(md,blob,lo,300)
+        (OUT/"native_large_copy_tracker_4AFCD0.txt").write_text("\n".join(tracker_lines),encoding="utf-8")
         lines += disasm(md,blob,lo,180)
+    # Include the UCRT prologue, not only the faulting basic block, to recover
+    # its stack-frame size and map saved helper registers accurately.
+    ucrt_lo=max(0,rip-0x300)
+    ucrt_blob=readva(f,rs,ucrt_lo,0x500)
+    ucrt_lines=[f"ucrt_rip={rip:#x}",f"window={ucrt_lo:#x}+0x500"]+disasm(md,ucrt_blob,ucrt_lo,1200)
+    (OUT/"ucrt_memmove_prologue_and_fault.txt").write_text("\n".join(ucrt_lines),encoding="utf-8")
     lines += ["","DISASSEMBLY AROUND RIP:"]+disasm(md,readva(f,rs,max(0,rip-0x40),0x200),max(0,rip-0x40),100)
     (OUT/"exception_context.txt").write_text("\n".join(lines),encoding="utf-8")
     print("\n".join(lines[-180:]))
