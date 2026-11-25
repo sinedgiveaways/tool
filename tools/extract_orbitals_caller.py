@@ -180,14 +180,14 @@ with DMP.open("rb") as f:
         caller_len=0x700
         caller_blob=readva(f,rs,caller_lo,caller_len)
         (OUT/"guest_caller_1B5A8E00.txt").write_text(
-            "\\n".join([f"module={gname}",f"base={gbase:#x}",f"window={caller_lo:#x}+{caller_len:#x}"]+disasm(md,caller_blob,caller_lo,2000)),
+            "\n".join([f"module={gname}",f"base={gbase:#x}",f"window={caller_lo:#x}+{caller_len:#x}"]+disasm(md,caller_blob,caller_lo,2000)),
             encoding="utf-8")
         wrapper_va=gbase+0x1C11DF00
         wrapper_lo=gbase+0x1C11DEF0
         wrapper_len=0x500
         wrapper_blob=readva(f,rs,wrapper_lo,wrapper_len)
         (OUT/"guest_memcpy_wrapper_1C11DF00.txt").write_text(
-            "\\n".join([f"module={gname}",f"imagebase={gbase:#x}",f"wrapper_va={wrapper_va:#x}",f"window={wrapper_lo:#x}+{wrapper_len:#x}"]+disasm(md,wrapper_blob,wrapper_lo,2000)),
+            "\n".join([f"module={gname}",f"imagebase={gbase:#x}",f"wrapper_va={wrapper_va:#x}",f"window={wrapper_lo:#x}+{wrapper_len:#x}"]+disasm(md,wrapper_blob,wrapper_lo,2000)),
             encoding="utf-8")
     # Inspect the helper's optional large-copy tracking callback target.
     if exe:
