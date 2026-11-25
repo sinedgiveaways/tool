@@ -211,7 +211,8 @@ with DMP.open("rb") as f:
     source_value=struct.unpack_from("<Q",desc,8)[0] if desc else 0x01460149013D0140
     specs=[
         ("source_qword",struct.pack("<Q",source_value)),
-        ("x25_qword",struct.pack("<Q",0x01490140)),\n        ("x25_dword",struct.pack("<I",0x01490140)),
+        ("x25_qword",struct.pack("<Q",0x01490140)),
+        ("x25_dword",struct.pack("<I",0x01490140)),
         ("copy_size_qword",struct.pack("<Q",0x05240500)),
         ("copy_size_dword",struct.pack("<I",0x05240500)),
     ]
