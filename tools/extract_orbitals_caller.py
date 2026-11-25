@@ -231,6 +231,14 @@ with DMP.open("rb") as f:
                 lines.append(f"count_field_qword_now={q:#x} low_dword={q&0xFFFFFFFF:#x}")
             else:
                 lines.append("count_field_now=<not captured>")
+            mi=memory_info(f,s)
+            for label,addr in (("x27",x27),("record_base",record_base),("source_field",source_field),("count_field",count_field)):
+                matches=[m for m in mi if m[0]<=addr<m[0]+m[2]]
+                if matches:
+                    for base0,alloc0,size0,ap0,state0,prot0,kind0 in matches[:3]:
+                        lines.append(f"{label} memory_region: base={base0:#x} allocation_base={alloc0:#x} size={size0:#x} state={state0:#x} protect={prot0:#x} type={kind0:#x}")
+                else:
+                    lines.append(f"{label} memory_region: no captured MemoryInfoList entry for {addr:#x}")
         else:
             lines.append("could not read x27+0xD0/+0xD8 from captured memory")
     # Correlate the destination with the dump's virtual-memory region metadata.
