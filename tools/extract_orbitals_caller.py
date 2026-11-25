@@ -249,7 +249,7 @@ with DMP.open("rb") as f:
     if game:
         gbase,gsize,gname=game
         lines.append(f"GAME {gname} imagebase={gbase:#x} size={gsize:#x}")
-        for label,lo_rva,hi_rva in (("caller_index_and_memcpy",0x1B5A8E00,0x1B5A9500),):
+        for label,lo_rva,hi_rva in (("caller_full_function",0x1B5A7000,0x1B5A9600),):
             va=gbase+lo_rva; size=hi_rva-lo_rva
             lines.append(f"\n{label} RVA=[{lo_rva:#x},{hi_rva:#x}) VA={va:#x}")
             blob=readva(f,rs,va,size)
@@ -258,10 +258,10 @@ with DMP.open("rb") as f:
     # truncated in the Actions console.
     if game:
         gbase,gsize,gname=game
-        caller_lo=gbase+0x1B5A8E00
-        caller_len=0x700
+        caller_lo=gbase+0x1B5A7000
+        caller_len=0x2600
         caller_blob=readva(f,rs,caller_lo,caller_len)
-        (OUT/"guest_caller_1B5A8E00.txt").write_text(
+        (OUT/"guest_caller_1B5A7000.txt").write_text(
             "\n".join([f"module={gname}",f"base={gbase:#x}",f"window={caller_lo:#x}+{caller_len:#x}"]+disasm(md,caller_blob,caller_lo,2000)),
             encoding="utf-8")
         wrapper_va=gbase+0x1C11DF00
