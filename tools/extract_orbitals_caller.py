@@ -38,9 +38,17 @@ def ranges(f,s,fs):
                 if sz and off+sz<=fs: out.append((va,sz,off))
     return out
 def readva(f,rs,va,n):
-    for start,sz,off in rs:
-        if start<=va and va+n<=start+sz: return read(f,off+va-start,n)
-    return None
+    # Read across adjacent minidump ranges instead of requiring one range to
+    # cover the entire request.
+    end=va+n; pos=va; chunks=[]
+    while pos<end:
+        candidates=[(start+sz,off+pos-start) for start,sz,off in rs if start<=pos<start+sz]
+        if not candidates: return None
+        range_end,file_off=max(candidates,key=lambda x:x[0])
+        take=min(end-pos,range_end-pos)
+        chunks.append(read(f,file_off,take))
+        pos+=take
+    return b"".join(chunks)
 def modules(f,s):
     if 4 not in s:return []
     z,r=s[4]; n=u32(f,r); out=[]
@@ -82,6 +90,23 @@ with DMP.open("rb") as f:
     if stack:
         for off in range(0,len(stack),16): lines.append(f"{rsp+off:016X}: "+stack[off:off+16].hex(" "))
     else: lines.append(f"<stack memory not captured at {rsp:#x}>")
+    # The call's caller frame is below the current RSP; inspect it explicitly.
+    pre_base=max(0,rsp-0x200)
+    pre=readva(f,rs,pre_base,0x200)
+    lines += ["","STACK BEFORE CURRENT RSP (0x200 bytes):"]
+    if pre:
+        for off in range(0,len(pre),16):
+            lines.append(f"{pre_base+off:016X}: "+pre[off:off+16].hex(" "))
+    else:
+        lines.append("<preceding stack memory not captured>")
+    candidate_base=max(0,rsp-0x78)
+    candidate=readva(f,rs,candidate_base,0x200)
+    lines += ["","CANDIDATE CALLER CONTEXT (RSP-0x78, 0x200 bytes; address is a hypothesis):"]
+    if candidate:
+        for off in range(0,len(candidate),16):
+            lines.append(f"{candidate_base+off:016X}: "+candidate[off:off+16].hex(" "))
+    else:
+        lines.append("<candidate context not captured>")
     lines += ["","REGISTER-POINTED MEMORY (0x80 bytes where captured):"]
     for k,v in regs.items():
         if v:
@@ -158,9 +183,11 @@ with DMP.open("rb") as f:
             "\\n".join([f"module={gname}",f"base={gbase:#x}",f"window={caller_lo:#x}+{caller_len:#x}"]+disasm(md,caller_blob,caller_lo,2000)),
             encoding="utf-8")
         wrapper_va=gbase+0x1C11DF00
-        wrapper_blob=readva(f,rs,wrapper_va-0x100,0x500)
+        wrapper_lo=gbase+0x1C11DEF0
+        wrapper_len=0x500
+        wrapper_blob=readva(f,rs,wrapper_lo,wrapper_len)
         (OUT/"guest_memcpy_wrapper_1C11DF00.txt").write_text(
-            "\\n".join([f"module={gname}",f"wrapper_va={wrapper_va:#x}",f"window={wrapper_va-0x100:#x}+0x500"]+disasm(md,wrapper_blob,wrapper_va-0x100,1000)),
+            "\\n".join([f"module={gname}",f"imagebase={gbase:#x}",f"wrapper_va={wrapper_va:#x}",f"window={wrapper_lo:#x}+{wrapper_len:#x}"]+disasm(md,wrapper_blob,wrapper_lo,2000)),
             encoding="utf-8")
     # Inspect the helper's optional large-copy tracking callback target.
     if exe:
