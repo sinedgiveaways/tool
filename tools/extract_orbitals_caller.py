@@ -198,6 +198,41 @@ with DMP.open("rb") as f:
         src=struct.unpack_from("<Q",desc,8)[0]
         lines.append("source qword = "+src.to_bytes(8,"little").hex(" "))
         lines.append("u16 words = "+", ".join(f"{x:#06x}" for x in struct.unpack("<4H",src.to_bytes(8,"little"))))
+    # Reconstruct the selected 0x40-byte record from the live Cpu.x27 metadata.
+    lines += ["","SOURCE/COUNT RECORD ADDRESS RECONSTRUCTION:"]
+    if desc:
+        x27=struct.unpack_from("<Q",desc,0xD8)[0]
+        d0b=readva(f,rs,x27+0xD0,8)
+        d8b=readva(f,rs,x27+0xD8,4)
+        if d0b and d8b:
+            ptr=struct.unpack("<Q",d0b)[0]
+            index=struct.unpack("<i",d8b)[0]
+            base=ptr if ptr else x27+0x10
+            scaled=index<<6
+            record_base=(base+scaled-0x40)&0xFFFFFFFFFFFFFFFF
+            source_field=record_base+0x30
+            count_field=record_base+0x38
+            lines += [f"x27={x27:#x} x27[+0xD0]={ptr:#x} x27[+0xD8]={index}",
+                      f"base={base:#x} index_times_0x40={scaled:#x}",
+                      f"selected_record_base={record_base:#x}",
+                      f"source_field(+0x30)={source_field:#x}",
+                      f"count_field(+0x38)={count_field:#x}"]
+            rec=readva(f,rs,record_base,0x40)
+            if rec:
+                for off in range(0,0x40,16):
+                    lines.append(f"  {record_base+off:016X}: {rec[off:off+16].hex(' ')}")
+            else:
+                lines.append("<selected record bytes not captured as one contiguous range>")
+            sb=readva(f,rs,source_field,8)
+            cb=readva(f,rs,count_field,8)
+            lines.append("source_field_now="+(hex(struct.unpack("<Q",sb)[0]) if sb else "<not captured>"))
+            if cb:
+                q=struct.unpack("<Q",cb)[0]
+                lines.append(f"count_field_qword_now={q:#x} low_dword={q&0xFFFFFFFF:#x}")
+            else:
+                lines.append("count_field_now=<not captured>")
+        else:
+            lines.append("could not read x27+0xD0/+0xD8 from captured memory")
     # Correlate the destination with the dump's virtual-memory region metadata.
     meminfo=memory_info(f,s)
     lines += ["","DESTINATION MEMORY-INFO REGIONS:"]
