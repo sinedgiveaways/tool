@@ -1,14 +1,6 @@
 name: run-analysis
 
 on:
-  pull_request:
-    branches:
-      - nx2
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
   workflow_dispatch:
     inputs:
       asset_sub:
@@ -29,7 +21,6 @@ permissions:
 
 jobs:
   analyze:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -63,40 +54,3 @@ jobs:
           git add analysis
           git commit -m "analysis results (run ${{ github.run_id }})" || echo rien
           git push
-
-  extract-memcpy-wrapper:
-    if: github.event_name == 'pull_request' && github.head_ref == 'analysis/extract-orbitals-caller-1b5a8ff0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Checkout analysis PR head
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Download original crash dump
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p dl dump
-          gh release download analysis-data --repo "$GITHUB_REPOSITORY" --pattern "*dmp*" --clobber --dir dl
-          for z in dl/*.zip; do unzip -q "$z" -d dump; done
-          DMP="$(find dump -type f -name '*.dmp' -print -quit)"
-          test -n "$DMP"
-          echo "DMP=$GITHUB_WORKSPACE/$DMP" >> "$GITHUB_ENV"
-
-      - name: Extract wrapper, caller, and native tracker
-        run: |
-          python -m pip install --disable-pip-version-check capstone
-          python tools/extract_orbitals_caller.py "$DMP"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: orbitals-wrapper-dispatch-analysis
-          path: orbitals_exception_analysis/
-          if-no-files-found: error
-          retention-days: 14
