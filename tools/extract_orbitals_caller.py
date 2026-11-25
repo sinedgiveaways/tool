@@ -217,6 +217,14 @@ with DMP.open("rb") as f:
                       f"selected_record_base={record_base:#x}",
                       f"source_field(+0x30)={source_field:#x}",
                       f"count_field(+0x38)={count_field:#x}"]
+            neighborhood_start=max(0,record_base-0x100)
+            neighborhood=readva(f,rs,neighborhood_start,0x300)
+            if neighborhood:
+                (OUT/"selected_record_neighborhood.bin").write_bytes(neighborhood)
+                for off in range(0,len(neighborhood),16):
+                    lines.append(f"  {neighborhood_start+off:016X}: {neighborhood[off:off+16].hex(' ')}")
+            else:
+                lines.append("<0x300-byte record/object neighborhood not fully captured>")
             rec=readva(f,rs,record_base,0x40)
             if rec:
                 for off in range(0,0x40,16):
